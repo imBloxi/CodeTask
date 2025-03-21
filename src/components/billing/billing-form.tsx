@@ -1,17 +1,29 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useSubscription } from '@/hooks/use-subscription'
 import { useWorkspace } from '@/hooks/use-workspace'
 
 export function BillingForm() {
   const [isLoading, setIsLoading] = useState(false)
+  const [renewalDate, setRenewalDate] = useState('')
   const { subscription, createPortalSession } = useSubscription()
   const { workspace } = useWorkspace()
   const router = useRouter()
+
+  useEffect(() => {
+    if (subscription?.current_period_end) {
+      const formatter = new Intl.DateTimeFormat(undefined, {
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric'
+      })
+      setRenewalDate(formatter.format(new Date(subscription.current_period_end)))
+    }
+  }, [subscription])
 
   const handlePortalSession = async () => {
     if (!workspace) {
@@ -21,15 +33,32 @@ export function BillingForm() {
 
     try {
       setIsLoading(true)
-      const { url } = await createPortalSession()
-      if (url) {
-        router.push(url)
+      const response = await createPortalSession()
+      
+      // Validate that url exists and is a string
+      if (response?.url && typeof response.url === 'string') {
+        // Security check for allowed domains
+        const allowedDomains = ['https://stripe.com', 'https://billing.stripe.com']
+        const isAllowed = allowedDomains.some(domain => response.url.startsWith(domain))
+        
+        if (isAllowed) {
+          router.push(response.url)
+        } else {
+          console.error('Unexpected redirect URL:', response.url)
+        }
+      } else {
+        console.error('Invalid URL received from createPortalSession:', response)
       }
     } catch (error) {
       console.error('Error creating portal session:', error)
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleUpgrade = () => {
+    setIsLoading(true)
+    router.push('/pricing')
   }
 
   return (
@@ -50,26 +79,26 @@ export function BillingForm() {
             </div>
             <div className="text-sm text-muted-foreground">
               {subscription
-                ? `Your plan renews on ${new Date(
-                    subscription.current_period_end
-                  ).toLocaleDateString()}`
+                ? renewalDate
+                  ? `Your plan renews on ${renewalDate}`
+                  : 'Renewal date unavailable'
                 : 'Limited features'}
             </div>
           </div>
           <Button
             variant={subscription ? 'outline' : 'default'}
-            onClick={subscription ? handlePortalSession : () => router.push('/pricing')}
+            onClick={subscription ? handlePortalSession : handleUpgrade}
             disabled={isLoading}
           >
             {subscription ? 'Manage Subscription' : 'Upgrade'}
           </Button>
         </div>
       </CardContent>
-      <CardFooter className="flex flex-col items-start gap-2 text-sm text-muted-foreground">
+      <CardHeader className="flex flex-col items-start gap-2 text-sm text-muted-foreground">
         <p>
           Manage your subscription on Stripe. You can upgrade, downgrade, or cancel at any time.
         </p>
-      </CardFooter>
+      </CardHeader>
     </Card>
   )
 } 
