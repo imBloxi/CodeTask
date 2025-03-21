@@ -38,13 +38,14 @@ export function BillingForm() {
       // Validate that url exists and is a string
       if (response?.url && typeof response.url === 'string') {
         // Security check for allowed domains
+        const url = response.url // Store it to a local constant to avoid the possibly null error
         const allowedDomains = ['https://stripe.com', 'https://billing.stripe.com']
-        const isAllowed = allowedDomains.some(domain => response.url.startsWith(domain))
+        const isAllowed = allowedDomains.some(domain => url.startsWith(domain))
         
         if (isAllowed) {
-          router.push(response.url)
+          router.push(url)
         } else {
-          console.error('Unexpected redirect URL:', response.url)
+          console.error('Unexpected redirect URL:', url)
         }
       } else {
         console.error('Invalid URL received from createPortalSession:', response)
